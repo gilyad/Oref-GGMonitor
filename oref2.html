@@ -417,7 +417,7 @@ let lastStateEnded = false
 
 /* ─── FETCH ─── */
 async function fetchAlerts() {
-  const res = await fetch(PROXY_URL, { cache:'no-store' })
+  const res = await fetch(PROXY_URL + '/alerts', { cache:'no-store' })
   const text = (await res.text()).trim()
   if (!text || text === 'null' || text === '[]') return null
   const json = JSON.parse(text)

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>פיקוד העורף — ניטור התראות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="oref2.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* ── CITY FILTER BAR ── */
+#city-filter-bar {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 500;
+  flex-wrap: wrap;
+}
+#city-filter-bar label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+#city-mode-select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+#city-input-wrap { position: relative; display: none; }
+#city-input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-family: var(--sans);
+  font-size: 12px;
+  width: 170px;
+  direction: rtl;
+}
+#city-input:focus { outline: none; border-color: var(--accent); }
+#city-suggestions {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  min-width: 170px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 9999;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+}
+#city-suggestions div { padding: 6px 12px; font-size: 12px; cursor: pointer; color: var(--text); }
+#city-suggestions div:hover { background: var(--border); }
+#city-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.city-tag {
+  background: rgba(230,57,70,0.15);
+  border: 1px solid rgba(230,57,70,0.35);
+  color: #ff9090;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: var(--mono);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.city-tag-x { cursor: pointer; opacity: 0.6; font-size: 14px; line-height: 1; }
+.city-tag-x:hover { opacity: 1; }
+
+/* ── 3-COLUMN LAYOUT ── */
+main { flex:1; display:grid; grid-template-columns:280px 1fr 230px; overflow:hidden; min-height:0; }
+
+/* ── ALERT CARDS ── */
+.alert-card {
+  border-radius: 7px;
+  padding: 8px 10px;
+  margin-bottom: 5px;
+  animation: card-in 0.25s ease;
+}
+.alert-card.active {
+  background: var(--accent-dim);
+  border: 1px solid rgba(230,57,70,0.35);
+  border-right: 3px solid var(--accent);
+}
+.alert-card.ended {
+  background: var(--green-dim);
+  border: 1px solid rgba(45,189,110,0.25);
+  border-right: 3px solid var(--green);
+}
+.alert-card.my-city {
+  box-shadow: 0 0 10px rgba(244,162,97,0.3);
+  border-top-color: rgba(244,162,97,0.4) !important;
+}
+.alert-card-area { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.alert-card.active .alert-card-area { color: #ff9090; }
+.alert-card.ended .alert-card-area { color: #6ee8a0; }
+.alert-card-cat { font-size: 10px; color: var(--text-dim); font-family: var(--mono); }
+.alert-card-time { font-size: 9px; color: var(--text-dim); font-family: var(--mono); margin-top: 3px; }
+.ended-badge {
+  display: inline-block;
+  background: rgba(45,189,110,0.2);
+  color: var(--green);
+  font-size: 9px;
+  font-family: var(--mono);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 4px;
+}
+
+/* ── HISTORY PANEL ── */
+.history-panel {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  overflow: hidden;
+  width: 230px;
+  flex-shrink: 0;
+}
+.history-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  min-height: 0;
+}
+.history-scroll::-webkit-scrollbar { width: 3px; }
+.history-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.hitem { padding: 6px 8px; border-right: 2px solid var(--border); margin-bottom: 4px; font-size: 10px; border-radius: 0 5px 5px 0; }
+.hitem.was-alert { border-right-color: rgba(230,57,70,0.6); background: rgba(230,57,70,0.05); }
+.hitem.was-ended { border-right-color: rgba(45,189,110,0.6); background: rgba(45,189,110,0.05); }
+.htime { font-family: var(--mono); font-size: 8px; color: var(--text-dim); margin-bottom: 3px; }
+.hareas { color: var(--text); line-height: 1.5; font-size: 10px; }
+</style>
+</head>
+<body>
+<div id="alert-overlay"></div>
+<header>
+  <div class="logo">
+    <div class="logo-icon">🚨</div>
+    <div>
+      <div class="logo-title">פיקוד העורף — Live</div>
+      <div class="logo-sub">Gregory Gilyadov Alert Monitor</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-pill">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">INIT</span>
+    </div>
+    <span id="clock">--:--:--</span>
+    <button class="hdr-btn notif-btn" id="notif-btn" onclick="requestNotif()">🔔 NOTIF</button>
+    <button class="hdr-btn sound-btn" id="sound-btn" onclick="toggleSound()">🔊 SOUND</button>
+  </div>
+</header>
+
+<!-- CITY FILTER BAR -->
+<div id="city-filter-bar">
+  <label>🔔 התראות קוליות עבור:</label>
+  <select id="city-mode-select" onchange="onModeChange()">
+    <option value="all">כל הארץ</option>
+    <option value="custom">ערים ספציפיות</option>
+  </select>
+  <div id="city-input-wrap">
+    <input id="city-input" type="text" placeholder="הקלד שם עיר..." oninput="onCityInput()" autocomplete="off"/>
+    <div id="city-suggestions"></div>
+  </div>
+  <div id="city-tags"></div>
+</div>
+
+<div id="err-box"></div>
+<main>
+  <!-- ALERTS SIDEBAR (left) -->
+  <div class="sidebar">
+    <div class="banner safe" id="banner">
+      <span class="banner-emoji" id="b-emoji">🛡️</span>
+      <div class="banner-title safe" id="b-title">אין התראות</div>
+      <div class="banner-detail" id="b-detail">המצב שקט — עדכון כל 2 שניות</div>
+    </div>
+    <div class="section-hdr">
+      <span>התראות פעילות</span>
+      <span class="badge" id="alert-badge">0</span>
+    </div>
+    <div class="alerts-scroll" id="alerts-list">
+      <div class="empty-state" id="empty-state"><span>✅</span>אין התראות כרגע</div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- HISTORY SIDEBAR (right) -->
+  <div class="history-panel">
+    <div class="section-hdr">
+      <span>היסטוריה</span>
+      <span class="badge show" id="hist-count">0</span>
+    </div>
+    <div class="history-scroll" id="history-body">
+      <div id="hist-empty" class="empty-state"><span>🕐</span>אין היסטוריה עדיין</div>
+    </div>
+  </div>
+</main>
+<footer>
+  <span>proxy → oref.org.il · 2s poll</span>
+  <div id="prog-wrap">
+    <span id="countdown-txt">2s</span>
+    <div id="prog-bar"><div id="prog-fill" style="width:100%"></div></div>
+  </div>
+</footer>
+
+<script>
+const INTERVAL = 2000
+const PROXY_URL = '/alerts'
+const GEONAMES_USER = 'gilyad'
+
+/* ─── CITY FILTER ─── */
+let cityMode = 'all'
+let myCities = []
+let knownCities = []
+
+;(function init() {
+  try {
+    const s = JSON.parse(localStorage.getItem('oref_cities') || '{}')
+    cityMode = s.mode || 'all'
+    myCities = s.cities || []
+  } catch(e) {}
+  document.getElementById('city-mode-select').value = cityMode
+  if (cityMode === 'custom') document.getElementById('city-input-wrap').style.display = 'block'
+  renderTags()
+})()
+
+function saveSettings() {
+  localStorage.setItem('oref_cities', JSON.stringify({ mode: cityMode, cities: myCities }))
+}
+function onModeChange() {
+  cityMode = document.getElementById('city-mode-select').value
+  document.getElementById('city-input-wrap').style.display = cityMode === 'custom' ? 'block' : 'none'
+  if (cityMode === 'custom') document.getElementById('city-input').focus()
+  saveSettings()
+}
+function onCityInput() {
+  const val = document.getElementById('city-input').value.trim()
+  const sug = document.getElementById('city-suggestions')
+  if (!val) { sug.style.display = 'none'; return }
+  const hits = knownCities.filter(c => c.includes(val) && !myCities.includes(c.toLowerCase())).slice(0, 8)
+  if (!hits.length) { sug.style.display = 'none'; return }
+  sug.innerHTML = hits.map(c => `<div onclick="addCity('${c.replace(/'/g,"&#39;")}')">${c}</div>`).join('')
+  sug.style.display = 'block'
+}
+function addCity(city) {
+  const lc = city.toLowerCase()
+  if (!myCities.includes(lc)) { myCities.push(lc); saveSettings(); renderTags() }
+  document.getElementById('city-input').value = ''
+  document.getElementById('city-suggestions').style.display = 'none'
+}
+function removeCity(lc) {
+  myCities = myCities.filter(c => c !== lc)
+  saveSettings(); renderTags()
+}
+function renderTags() {
+  document.getElementById('city-tags').innerHTML = myCities.map(c =>
+    `<div class="city-tag"><span class="city-tag-x" onclick="removeCity('${c.replace(/'/g,"&#39;")}')">×</span>${c}</div>`
+  ).join('')
+}
+function isMyCityAlert(areas) {
+  if (cityMode === 'all') return true
+  if (!myCities.length) return false
+  return areas.some(a => myCities.some(mc => a.toLowerCase().includes(mc)))
+}
+
+/* ─── MAP ─── */
+const map = L.map('map', { center:[31.8,35.1], zoom:8 })
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  { attribution:'© CARTO', subdomains:'abcd', maxZoom:19 }).addTo(map)
+
+const cityCache = {}
+let alertLayers = []
+
+function clearMapAlerts() { alertLayers.forEach(l => map.removeLayer(l)); alertLayers = [] }
+
+async function getCityCoords(name) {
+  if (cityCache[name]) return cityCache[name]
+  try {
+    const url = `https://secure.geonames.org/searchJSON?q=${encodeURIComponent(name)}&country=IL&maxRows=1&username=${GEONAMES_USER}`
+    const d = await (await fetch(url)).json()
+    if (d.geonames && d.geonames.length) {
+      const c = { lat: parseFloat(d.geonames[0].lat), lng: parseFloat(d.geonames[0].lng) }
+      cityCache[name] = c; return c
+    }
+  } catch(e) {}
+  return null
+}
+function makePulseIcon() {
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:14px;height:14px;background:#ff3333;border-radius:50%;animation:pm 1s infinite"></div><style>@keyframes pm{0%{box-shadow:0 0 0 0 rgba(255,0,0,0.7)}70%{box-shadow:0 0 0 10px rgba(255,0,0,0)}100%{box-shadow:0 0 0 0 rgba(255,0,0,0)}}</style>`,
+    iconSize:[14,14], iconAnchor:[7,7]
+  })
+}
+function addCityMarker(coords, city) {
+  const m = L.marker([coords.lat,coords.lng], { icon: makePulseIcon() }).addTo(map).bindTooltip(city)
+  const c = L.circle([coords.lat,coords.lng], { radius:3500, color:'#ff3344', weight:1.2, fillColor:'#e63946', fillOpacity:0.18 }).addTo(map)
+  alertLayers.push(m, c)
+}
+async function plotAlertsOnMap(areas) {
+  clearMapAlerts()
+  if (!areas.length) return
+  const results = await Promise.all(areas.map(a => getCityCoords(a)))
+  results.forEach((c, i) => { if (c) addCityMarker(c, areas[i]) })
+  const valid = results.filter(Boolean)
+  if (valid.length === 1) map.flyTo([valid[0].lat, valid[0].lng], 10, { duration:1.0 })
+  else if (valid.length > 1) map.flyToBounds(L.latLngBounds(valid.map(c=>[c.lat,c.lng])).pad(0.3), { duration:1.0 })
+}
+
+/* ─── AUDIO ─── */
+let audioCtx = null
+let soundEnabled = true
+function getCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  return audioCtx
+}
+function playAlertSound() {
+  if (!soundEnabled) return
+  try {
+    const ctx = getCtx()
+    ;[0, 0.18, 0.36].forEach(delay => {
+      const osc = ctx.createOscillator(), gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.frequency.value = 880
+      gain.gain.setValueAtTime(0.25, ctx.currentTime + delay)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.45)
+      osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + 0.45)
+    })
+  } catch(e) {}
+}
+function playEndedSound() {
+  if (!soundEnabled) return
+  try {
+    const ctx = getCtx()
+    const osc = ctx.createOscillator(), gain = ctx.createGain()
+    osc.connect(gain); gain.connect(ctx.destination)
+    osc.frequency.value = 440
+    gain.gain.setValueAtTime(0.15, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7)
+    osc.start(); osc.stop(ctx.currentTime + 0.7)
+  } catch(e) {}
+}
+function toggleSound() {
+  soundEnabled = !soundEnabled
+  const b = document.getElementById('sound-btn')
+  b.textContent = soundEnabled ? '🔊 SOUND' : '🔇 MUTED'
+  b.classList.toggle('muted', !soundEnabled)
+}
+
+/* ─── NOTIFICATIONS ─── */
+function requestNotif() {
+  if (!('Notification' in window)) return
+  Notification.requestPermission().then(p => {
+    const b = document.getElementById('notif-btn')
+    if (p === 'granted') { b.textContent = '🔔 ON'; b.classList.add('granted') }
+  })
+}
+function sendNotif(title, body) {
+  if (Notification.permission === 'granted') new Notification(title, { body })
+}
+
+/* ─── CLOCK ─── */
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('he-IL', { hour12:false })
+}, 1000)
+
+/* ─── HISTORY ─── */
+const histItems = []
+
+function addHistory(areas, type) {
+  const time = new Date().toLocaleTimeString('he-IL', { hour12:false })
+  histItems.unshift({ time, areas, type })
+  if (histItems.length > 60) histItems.pop()
+  renderHistory()
+}
+function renderHistory() {
+  const body = document.getElementById('history-body')
+  const empty = document.getElementById('hist-empty')
+  const counter = document.getElementById('hist-count')
+  counter.textContent = histItems.length
+  if (!histItems.length) { if(empty) empty.style.display='flex'; return }
+  if (empty) empty.style.display = 'none'
+  body.innerHTML = histItems.map(h => {
+    const label = h.type === 'ended' ? '✅ הסתיים' : '🚨 התראה'
+    const preview = h.areas.slice(0,3).join('، ') + (h.areas.length > 3 ? ` +${h.areas.length-3}` : '')
+    return `<div class="hitem ${h.type === 'ended' ? 'was-ended' : 'was-alert'}">
+      <div class="htime">${label} &nbsp;${h.time}</div>
+      <div class="hareas">${preview}</div>
+    </div>`
+  }).join('') + `<div id="hist-empty" style="display:none"></div>`
+}
+
+/* ─── STATE ─── */
+let lastAlertId = null
+let lastAlertAreas = ''
+let lastStateEnded = false
+
+/* ─── FETCH ─── */
+async function fetchAlerts() {
+  const res = await fetch(PROXY_URL, { cache:'no-store' })
+  const text = (await res.text()).trim()
+  if (!text || text === 'null' || text === '[]') return null
+  const json = JSON.parse(text)
+  if (json && json.data && json.data.length) return json
+  return null
+}
+
+/* ─── RENDER ─── */
+function now() { return new Date().toLocaleTimeString('he-IL', { hour12:false }) }
+
+function renderActive(alert) {
+  const areas = alert.data
+  const title = alert.title || ''
+  const isEnded = title.includes('אירוע הסתיים') || title.includes('הסתיים')
+
+  // update city autocomplete pool
+  areas.forEach(a => { if (!knownCities.includes(a)) knownCities.push(a) })
+
+  // badge
+  const badge = document.getElementById('alert-badge')
+  badge.textContent = areas.length
+  badge.classList.add('show')
+
+  // cards
+  document.getElementById('alerts-list').innerHTML = areas.map(a => {
+    const mine = cityMode === 'custom' && myCities.some(mc => a.toLowerCase().includes(mc))
+    return `<div class="alert-card ${isEnded ? 'ended' : 'active'}${mine ? ' my-city' : ''}">
+      <div class="alert-card-area">${isEnded ? '<span class="ended-badge">✅ הסתיים</span>' : ''}${a}</div>
+      <div class="alert-card-cat">${title}</div>
+      <div class="alert-card-time">${now()}</div>
+    </div>`
+  }).join('')
+
+  if (isEnded) {
+    setBanner('safe', '✅', 'safe', 'אירוע הסתיים', areas.slice(0,3).join('، '))
+    document.getElementById('alert-overlay').classList.remove('show')
+    document.title = '✅ הסתיים'
+    if (!lastStateEnded) {
+      if (isMyCityAlert(areas)) playEndedSound()
+      addHistory(areas, 'ended')
+      lastStateEnded = true
+    }
+  } else {
+    setBanner('danger', '🚨', 'danger', 'התראה פעילה!', `${areas.length} יישובים`)
+    document.getElementById('alert-overlay').classList.add('show')
+    document.title = '🚨 התראה!'
+    lastStateEnded = false
+    const areasKey = areas.slice().sort().join(',')
+    if (alert.id !== lastAlertId || areasKey !== lastAlertAreas) {
+      lastAlertId = alert.id
+      lastAlertAreas = areasKey
+      if (isMyCityAlert(areas)) {
+        playAlertSound()
+        sendNotif('🚨 התראה!', areas.slice(0,5).join(', '))
+      }
+      addHistory(areas, 'alert')
+      plotAlertsOnMap(areas)
+    }
+  }
+}
+
+function renderEmpty() {
+  document.getElementById('alert-badge').classList.remove('show')
+  document.getElementById('alerts-list').innerHTML =
+    '<div class="empty-state"><span>✅</span>אין התראות כרגע</div>'
+  setBanner('safe', '🛡️', 'safe', 'אין התראות', 'המצב שקט — עדכון כל 2 שניות')
+  document.getElementById('alert-overlay').classList.remove('show')
+  document.title = 'פיקוד העורף — שקט'
+  clearMapAlerts()
+  lastStateEnded = false
+}
+
+function setBanner(cls, emoji, titleCls, title, detail) {
+  document.getElementById('banner').className = 'banner ' + cls
+  document.getElementById('b-emoji').textContent = emoji
+  document.getElementById('b-title').className = 'banner-title ' + titleCls
+  document.getElementById('b-title').textContent = title
+  document.getElementById('b-detail').textContent = detail
+}
+
+/* ─── STATUS ─── */
+function setStatus(state) {
+  const dot = document.getElementById('status-dot')
+  const txt = document.getElementById('status-text')
+  dot.className = 'dot' + (state === 'alert' ? ' alerting' : state === 'error' ? ' error' : '')
+  txt.textContent = state === 'alert' ? 'ALERT' : state === 'error' ? 'ERR' : 'LIVE'
+}
+
+/* ─── PROGRESS ─── */
+let progStart = Date.now()
+function animateProg() {
+  const pct = Math.max(0, 100 - ((Date.now() - progStart) / INTERVAL) * 100)
+  document.getElementById('prog-fill').style.width = pct + '%'
+  document.getElementById('countdown-txt').textContent =
+    (Math.max(0, INTERVAL - (Date.now() - progStart)) / 1000).toFixed(1) + 's'
+  requestAnimationFrame(animateProg)
+}
+animateProg()
+
+/* ─── POLL ─── */
+async function poll() {
+  progStart = Date.now()
+  try {
+    const alert = await fetchAlerts()
+    if (alert) { renderActive(alert); setStatus('alert') }
+    else { renderEmpty(); setStatus('live') }
+    const err = document.getElementById('err-box')
+    err.textContent = ''; err.classList.remove('show')
+  } catch(e) {
+    setStatus('error')
+    const err = document.getElementById('err-box')
+    err.textContent = '⚠ ' + e.message
+    err.classList.add('show')
+  }
+}
+
+poll()
+setInterval(poll, INTERVAL)
+</script>
+</body>
+</html>

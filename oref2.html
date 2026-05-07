@@ -4,6 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>פיקוד העורף — ניטור התראות</title>
+
+<!-- CONFIG: правильный URL воркера -->
+<script>
+  const PROXY_URL = 'https://oref.gilyad.workers.dev';
+
+  async function fetchAlerts() {
+    const res = await fetch(PROXY_URL + '/alerts', { cache:'no-store' });
+    const text = (await res.text()).trim();
+
+    // Пустой ответ = нет тревог
+    if (!text || text === 'null' || text === '[]' || text === '{}') return null;
+
+    const json = JSON.parse(text);
+    if (json && json.data && json.data.length) return json;
+
+    return null;
+  }
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>

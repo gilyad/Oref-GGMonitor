@@ -27,7 +27,13 @@ async function handleRequest(request) {
           'Accept': 'application/json'
         }
       })
-      const body = await res.text()
+      let body = await res.text();
+
+// Если ответ пустой — подменяем на пустой массив
+if (!body.trim()) {
+  body = "[]";
+}
+
       const headers = {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache'

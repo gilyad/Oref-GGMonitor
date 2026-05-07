@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>פיקוד העורף — ניטור התראות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f; --panel: #0f1218; --border: #1e2530;
+    --accent: #e63946; --accent-dim: rgba(230,57,70,0.15);
+    --green: #2dbd6e; --green-dim: rgba(45,189,110,0.12);
+    --yellow: #f4a261; --text: #c8d6e5; --text-dim: #5a6a7a;
+    --mono: 'Share Tech Mono', monospace; --sans: 'Heebo', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  body::before { content:''; position:fixed; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px); pointer-events:none; z-index:9999; }
+
+  header { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; border-bottom:1px solid var(--border); background:var(--panel); flex-shrink:0; }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-icon { width:38px; height:38px; background:var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; box-shadow:0 0 20px rgba(230,57,70,0.5); }
+  .logo-title { font-size:17px; font-weight:700; }
+  .logo-sub { font-size:10px; color:var(--text-dim); font-family:var(--mono); letter-spacing:0.1em; }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  .status-pill { display:flex; align-items:center; gap:7px; background:var(--border); border-radius:20px; padding:5px 12px; font-family:var(--mono); font-size:11px; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 6px var(--green); animation:blink 2s infinite; }
+  .dot.alerting { background:var(--accent); box-shadow:0 0 10px var(--accent); animation:blink-fast 0.4s infinite; }
+  .dot.error { background:var(--text-dim); box-shadow:none; animation:none; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  @keyframes blink-fast { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.6)} }
+  #clock { font-family:var(--mono); font-size:13px; color:var(--text-dim); }
+  .sound-btn { background:var(--green-dim); border:1px solid rgba(45,189,110,0.3); color:var(--green); border-radius:6px; padding:5px 11px; font-family:var(--mono); font-size:11px; cursor:pointer; transition:all 0.2s; letter-spacing:0.05em; }
+  .sound-btn.muted { background:var(--border); border-color:var(--border); color:var(--text-dim); }
+
+  main { flex:1; display:grid; grid-template-columns:1fr 340px; overflow:hidden; height:calc(100vh - 67px); }
+
+  .map-section { background:#07090c; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+  .map-section::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.6) 100%); pointer-events:none; z-index:1; }
+  #map-svg { width:100%; height:100%; max-width:400px; max-height:calc(100vh - 67px); z-index:2; position:relative; }
+  .r { fill:#131c2a; stroke:#1e3050; stroke-width:0.7; transition:fill 0.4s,filter 0.4s; }
+  .r:hover { fill:#1a2a3d; }
+  .r.alert-active { fill:#e63946 !important; stroke:#ff6b6b; filter:drop-shadow(0 0 10px rgba(230,57,70,0.9)); animation:flash-region 0.5s infinite alternate; }
+  @keyframes flash-region { from{fill:#e63946} to{fill:#ff8080} }
+  .rlabel { font-family:'Heebo',sans-serif; font-size:9px; fill:rgba(150,180,220,0.55); pointer-events:none; text-anchor:middle; }
+  .rlabel.alerted { fill:#fff; font-weight:700; font-size:10px; }
+
+  .sidebar { display:flex; flex-direction:column; border-right:1px solid var(--border); overflow:hidden; }
+  .banner { padding:18px 16px 14px; border-bottom:1px solid var(--border); text-align:center; transition:background 0.5s; }
+  .banner.safe { background:linear-gradient(160deg,rgba(45,189,110,0.07),transparent); }
+  .banner.danger { background:linear-gradient(160deg,rgba(230,57,70,0.2),transparent); animation:danger-bg 1s infinite; }
+  @keyframes danger-bg { 0%,100%{background:linear-gradient(160deg,rgba(230,57,70,0.2),transparent)} 50%{background:linear-gradient(160deg,rgba(230,57,70,0.35),transparent)} }
+  .banner-emoji { font-size:40px; display:block; margin-bottom:8px; }
+  .banner-title { font-size:20px; font-weight:900; letter-spacing:0.05em; }
+  .banner-title.safe { color:var(--green); }
+  .banner-title.danger { color:var(--accent); }
+  .banner-detail { font-size:11px; color:var(--text-dim); font-family:var(--mono); margin-top:4px; letter-spacing:0.08em; }
+
+  .section-header { padding:9px 14px; font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:0.12em; text-transform:uppercase; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+  .badge { background:var(--accent); color:#fff; font-size:10px; font-weight:700; padding:1px 7px; border-radius:4px; display:none; }
+  .badge.show { display:inline-block; }
+
+  .alerts-scroll { flex:1; overflow-y:auto; padding:8px; }
+  .alerts-scroll::-webkit-scrollbar { width:3px; }
+  .alerts-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  .alert-card { background:var(--accent-dim); border:1px solid rgba(230,57,70,0.35); border-radius:7px; padding:10px 12px; margin-bottom:6px; animation:card-in 0.3s ease; }
+  @keyframes card-in { from{transform:translateX(16px);opacity:0} to{transform:translateX(0);opacity:1} }
+  .alert-card-area { font-size:15px; font-weight:700; color:#ff9090; margin-bottom:3px; }
+  .alert-card-cat { font-size:11px; color:var(--text-dim); font-family:var(--mono); }
+  .alert-card-time { font-size:10px; color:var(--text-dim); font-family:var(--mono); margin-top:4px; }
+  .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:10px; color:var(--text-dim); font-size:13px; text-align:center; padding:20px; }
+  .empty-state span { font-size:28px; opacity:0.3; }
+
+  .history-wrap { border-top:1px solid var(--border); flex-shrink:0; }
+  .history-toggle { padding:9px 14px; font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; user-select:none; display:flex; justify-content:space-between; }
+  .history-toggle:hover { color:var(--text); }
+  .history-body { max-height:150px; overflow-y:auto; padding:0 8px 8px; }
+  .history-body::-webkit-scrollbar { width:3px; }
+  .history-body::-webkit-scrollbar-thumb { background:var(--border); }
+  .hitem { padding:6px 10px; border-right:2px solid var(--border); margin-bottom:3px; font-size:11px; }
+  .hitem.was-alert { border-right-color:rgba(230,57,70,0.6); }
+  .htime { font-family:var(--mono); font-size:9px; color:var(--text-dim); margin-bottom:1px; }
+  .hareas { color:var(--text); line-height:1.4; }
+
+  footer { padding:7px 24px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--text-dim); background:var(--panel); flex-shrink:0; }
+  #prog-wrap { display:flex; align-items:center; gap:8px; }
+  #prog-bar { width:70px; height:2px; background:var(--border); border-radius:1px; overflow:hidden; }
+  #prog-fill { height:100%; background:var(--green); border-radius:1px; transition:width 1s linear; }
+
+  #alert-overlay { display:none; position:fixed; inset:0; z-index:10000; background:rgba(180,0,0,0.06); border:3px solid var(--accent); pointer-events:none; animation:overlay-flash 0.5s infinite alternate; }
+  #alert-overlay.show { display:block; }
+  @keyframes overlay-flash { from{border-color:rgba(230,57,70,0.8)} to{border-color:rgba(230,57,70,0.1)} }
+
+  #err-box { display:none; background:rgba(244,162,97,0.1); border-top:1px solid rgba(244,162,97,0.3); padding:7px 24px; font-family:var(--mono); font-size:11px; color:var(--yellow); flex-shrink:0; }
+  #err-box.show { display:block; }
+
+  @media(max-width:700px){ main{grid-template-columns:1fr;grid-template-rows:260px 1fr;height:auto;overflow:auto;} body{overflow:auto;} .map-section{order:1;} .sidebar{order:2;min-height:400px;} }
+</style>
+</head>
+<body>
+
+<div id="alert-overlay"></div>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🚨</div>
+    <div>
+      <div class="logo-title">פיקוד העורף — Live</div>
+      <div class="logo-sub">Home Alert Monitor</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-pill">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">INIT</span>
+    </div>
+    <span id="clock">--:--:--</span>
+    <button class="sound-btn" id="sound-btn" onclick="toggleSound()">🔊 SOUND</button>
+  </div>
+</header>
+
+<div id="err-box"></div>
+
+<main>
+  <div class="map-section">
+    <svg id="map-svg" viewBox="0 0 280 560" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="280" height="560" fill="#07111e"/>
+      <text font-size="8" fill="rgba(30,80,130,0.7)" font-family="sans-serif" x="14" y="230" transform="rotate(-90,14,230)">ים תיכון</text>
+
+      <path id="r-upper-north" class="r" d="M105,15 L195,15 L210,35 L205,60 L185,75 L155,80 L130,72 L110,55 L100,35 Z"/>
+      <text class="rlabel" id="l-upper-north" x="155" y="50">גליל עליון</text>
+
+      <path id="r-haifa" class="r" d="M100,55 L130,72 L128,100 L110,112 L88,105 L82,82 Z"/>
+      <text class="rlabel" id="l-haifa" x="108" y="88">חיפה</text>
+
+      <path id="r-golan" class="r" d="M185,75 L230,72 L235,110 L215,118 L200,108 L205,80 Z"/>
+      <text class="rlabel" id="l-golan" x="218" y="97">גולן</text>
+
+      <path id="r-lower-galilee" class="r" d="M88,105 L128,100 L135,130 L120,142 L95,138 L80,122 Z"/>
+      <text class="rlabel" id="l-lower-galilee" x="109" y="124">גליל תחתון</text>
+
+      <path id="r-valley" class="r" d="M95,138 L135,130 L145,150 L200,108 L215,118 L210,145 L185,158 L150,162 L120,155 Z"/>
+      <text class="rlabel" id="l-valley" x="160" y="140">עמק יזרעאל</text>
+
+      <path id="r-sharon" class="r" d="M80,155 L120,155 L122,185 L105,196 L78,190 L74,172 Z"/>
+      <text class="rlabel" id="l-sharon" x="99" y="176">שרון</text>
+
+      <path id="r-shomron" class="r" d="M120,155 L185,158 L192,190 L178,210 L150,215 L125,210 L122,185 Z"/>
+      <text class="rlabel" id="l-shomron" x="158" y="187">שומרון</text>
+
+      <path id="r-telaviv" class="r" d="M74,190 L105,196 L108,218 L92,226 L72,220 Z"/>
+      <text class="rlabel" id="l-telaviv" x="90" y="210">ת״א</text>
+
+      <path id="r-shfela" class="r" d="M72,220 L92,226 L95,252 L80,260 L65,252 L62,234 Z"/>
+      <text class="rlabel" id="l-shfela" x="79" y="242">שפלה</text>
+
+      <path id="r-yehuda" class="r" d="M125,210 L178,210 L185,240 L175,262 L152,268 L130,260 L108,248 L108,218 L122,185 Z"/>
+      <text class="rlabel" id="l-yehuda" x="150" y="238">יהודה</text>
+
+      <path id="r-jerusalem" class="r" d="M130,260 L152,268 L155,285 L138,292 L125,286 Z"/>
+      <text class="rlabel" id="l-jerusalem" x="140" y="278">ירושלים</text>
+
+      <path id="r-otef" class="r" d="M50,252 L65,252 L80,260 L82,285 L70,295 L45,290 L40,270 Z" style="fill:#112030;stroke:#1a3550"/>
+      <text class="rlabel" id="l-otef" x="59" y="275">עוטף עזה</text>
+
+      <path id="r-ashkelon" class="r" d="M62,260 L95,252 L100,278 L90,290 L65,288 Z"/>
+      <text class="rlabel" id="l-ashkelon" x="80" y="275">אשקלון</text>
+
+      <path id="r-beersheva" class="r" d="M45,290 L70,295 L82,285 L100,278 L108,300 L155,308 L160,330 L115,335 L75,330 L52,315 Z"/>
+      <text class="rlabel" id="l-beersheva" x="105" y="315">באר שבע</text>
+
+      <path id="r-negev" class="r" d="M52,315 L75,330 L115,335 L160,330 L168,365 L155,420 L125,460 L95,468 L70,442 L48,390 L42,350 Z"/>
+      <text class="rlabel" id="l-negev" x="108" y="395">נגב</text>
+
+      <path id="r-eilat" class="r" d="M70,442 L95,468 L85,498 L62,505 L50,485 Z"/>
+      <text class="rlabel" id="l-eilat" x="72" y="475">אילת</text>
+    </svg>
+  </div>
+
+  <div class="sidebar">
+    <div class="banner safe" id="banner">
+      <span class="banner-emoji" id="b-emoji">🛡️</span>
+      <div class="banner-title safe" id="b-title">אין התראות</div>
+      <div class="banner-detail" id="b-detail">המצב שקט — עדכון כל 5 שניות</div>
+    </div>
+    <div class="section-header">
+      <span>התראות פעילות</span>
+      <span class="badge" id="alert-badge">0</span>
+    </div>
+    <div class="alerts-scroll" id="alerts-list">
+      <div class="empty-state" id="empty-state">
+        <span>✅</span>
+        אין התראות כרגע
+      </div>
+    </div>
+    <div class="history-wrap">
+      <div class="history-toggle" onclick="toggleHistory()">
+        <span>היסטוריה</span>
+        <span id="hist-arrow">▲</span>
+      </div>
+      <div class="history-body" id="history-body">
+        <div style="color:var(--text-dim);font-size:11px;font-family:var(--mono);padding:8px;">אין היסטוריה עדיין</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span>src: oref.org.il</span>
+  <div id="prog-wrap">
+    <span id="countdown-txt">עדכון בעוד 5s</span>
+    <div id="prog-bar"><div id="prog-fill" style="width:100%"></div></div>
+  </div>
+</footer>
+
+<script>
+const INTERVAL = 5000;
+let soundEnabled = true;
+let lastAlertIds = new Set();
+let historyOpen = true;
+let historyLog = [];
+let countdown = 5;
+let progTimer = null;
+let consecutiveErrors = 0;
+
+// ── Audio ──
+let audioCtx = null;
+function getCtx() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
+function playAlert() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getCtx();
+    [880,440,880,440,880].forEach((f,i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = f; o.type = 'square';
+      const t = ctx.currentTime + i * 0.2;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.25, t + 0.05);
+      g.gain.linearRampToValueAtTime(0, t + 0.18);
+      o.start(t); o.stop(t + 0.2);
+    });
+  } catch(e) {}
+}
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  const b = document.getElementById('sound-btn');
+  b.textContent = soundEnabled ? '🔊 SOUND' : '🔇 MUTED';
+  b.className = 'sound-btn' + (soundEnabled ? '' : ' muted');
+}
+
+// ── Clock ──
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('he-IL', {hour12:false});
+}, 1000);
+
+// ── Progress ──
+function startProgress() {
+  clearInterval(progTimer);
+  countdown = INTERVAL / 1000;
+  const fill = document.getElementById('prog-fill');
+  const txt = document.getElementById('countdown-txt');
+  fill.style.width = '100%';
+  progTimer = setInterval(() => {
+    countdown = Math.max(0, countdown - 1);
+    fill.style.width = (countdown / (INTERVAL/1000) * 100) + '%';
+    txt.textContent = `עדכון בעוד ${countdown}s`;
+  }, 1000);
+}
+
+// ── Status ──
+function setStatus(state, text) {
+  document.getElementById('status-dot').className = 'dot' + (state==='alert'?' alerting':state==='error'?' error':'');
+  document.getElementById('status-text').textContent = text;
+}
+function showError(msg) { const b=document.getElementById('err-box'); b.textContent='⚠️ '+msg; b.className='err-box show'; }
+function hideError() { document.getElementById('err-box').className='err-box'; }
+
+// ── Map ──
+const AREA_MAP = [
+  {keys:['עכו','נהריה','כרמיאל','צפת','טבריה','קריית שמונה','מטולה','רמת הגולן'], id:'upper-north'},
+  {keys:['חיפה','קריית ים','קריית אתא','נשר','טירת כרמל','קריית מוצקין','קריית ביאליק'], id:'haifa'},
+  {keys:['גולן','קצרין'], id:'golan'},
+  {keys:['נצרת','עפולה','בית שאן','יזרעאל','מגידו'], id:'lower-galilee'},
+  {keys:['עמק','יזרעאל'], id:'valley'},
+  {keys:['שרון','נתניה','הרצליה','רעננה','כפר סבא','הוד השרון','רא"ש העין','ראש העין'], id:'sharon'},
+  {keys:['שומרון','טולכרם','קלקיליה'], id:'shomron'},
+  {keys:['תל אביב','רמת גן','גבעתיים','בני ברק','פתח תקווה','ראשון לציון','רחובות','לוד','רמלה','בת ים','חולון'], id:'telaviv'},
+  {keys:['שפלה','גדרה','יבנה','קרית גת','בית שמש'], id:'shfela'},
+  {keys:['יהודה','מעלה אדומים','גוש עציון','הברון'], id:'yehuda'},
+  {keys:['ירושלים'], id:'jerusalem'},
+  {keys:['עוטף','שדרות','אשכול','בארי','רעים','נחל עוז','כפר עזה'], id:'otef'},
+  {keys:['אשקלון','אשדוד'], id:'ashkelon'},
+  {keys:['באר שבע','באר-שבע','קרית מלאכי','קיריית'], id:'beersheva'},
+  {keys:['נגב','דימונה','ערד','ירוחם','מצפה רמון','רהט','תל שבע'], id:'negev'},
+  {keys:['אילת'], id:'eilat'},
+];
+function areaToRegion(name) {
+  for (const e of AREA_MAP) for (const k of e.keys) if (name.includes(k)) return e.id;
+  return null;
+}
+function clearMap() {
+  document.querySelectorAll('.r').forEach(e => e.classList.remove('alert-active'));
+  document.querySelectorAll('.rlabel').forEach(e => e.classList.remove('alerted'));
+}
+function highlightArea(name) {
+  const id = areaToRegion(name);
+  if (!id) return;
+  const r = document.getElementById('r-'+id);
+  const l = document.getElementById('l-'+id);
+  if (r) r.classList.add('alert-active');
+  if (l) l.classList.add('alerted');
+}
+
+// ── Render ──
+function renderAlerts(alerts) {
+  const list = document.getElementById('alerts-list');
+  const empty = document.getElementById('empty-state');
+  const badge = document.getElementById('alert-badge');
+  const banner = document.getElementById('banner');
+  const bTitle = document.getElementById('b-title');
+  const bEmoji = document.getElementById('b-emoji');
+  const bDetail = document.getElementById('b-detail');
+  const overlay = document.getElementById('alert-overlay');
+  clearMap();
+
+  if (!alerts || alerts.length === 0) {
+    list.innerHTML = ''; list.appendChild(empty); empty.style.display='flex';
+    badge.className='badge'; banner.className='banner safe';
+    bTitle.className='banner-title safe'; bTitle.textContent='אין התראות';
+    bEmoji.textContent='🛡️'; bDetail.textContent='המצב שקט — עדכון כל 5 שניות';
+    overlay.classList.remove('show'); setStatus('ok','CLEAR');
+    document.title='✅ פיקוד העורף — שקט';
+    return;
+  }
+
+  empty.style.display='none'; list.innerHTML='';
+  const allAreas = alerts.flatMap(a => Array.isArray(a.data)?a.data:[a.data]).filter(Boolean);
+  badge.textContent=allAreas.length; badge.className='badge show';
+  banner.className='banner danger'; bTitle.className='banner-title danger';
+  bTitle.textContent=`⚠️ ${allAreas.length} אזורים בהתראה`; bEmoji.textContent='🚨';
+  bDetail.textContent=allAreas.slice(0,3).join(' · ')+(allAreas.length>3?' ...':'');
+  overlay.classList.add('show'); setStatus('alert',`ALERT ×${allAreas.length}`);
+  document.title=`🚨 פיקוד העורף — התראה!`;
+
+  alerts.forEach(alert => {
+    (Array.isArray(alert.data)?alert.data:[alert.data]).forEach(area => {
+      if (area) highlightArea(area);
+      const card=document.createElement('div'); card.className='alert-card';
+      card.innerHTML=`<div class="alert-card-area">${area||'—'}</div>
+        <div class="alert-card-cat">${alert.title||'ירי רקטות'}</div>
+        <div class="alert-card-time">${new Date().toLocaleTimeString('he-IL')}</div>`;
+      list.appendChild(card);
+    });
+  });
+}
+
+function addHistory(alerts) {
+  const hasAlert = alerts && alerts.length > 0;
+  const areas = hasAlert
+    ? alerts.flatMap(a=>Array.isArray(a.data)?a.data:[a.data]).filter(Boolean).join(', ')
+    : 'שקט';
+  historyLog.unshift({hasAlert, areas, time: new Date().toLocaleTimeString('he-IL')});
+  if (historyLog.length > 60) historyLog.pop();
+  document.getElementById('history-body').innerHTML = historyLog.slice(0,25).map(h=>
+    `<div class="hitem ${h.hasAlert?'was-alert':''}">
+      <div class="htime">${h.time}</div>
+      <div class="hareas">${h.areas}</div>
+    </div>`).join('');
+}
+
+function toggleHistory() {
+  historyOpen=!historyOpen;
+  document.getElementById('history-body').style.display=historyOpen?'block':'none';
+  document.getElementById('hist-arrow').textContent=historyOpen?'▲':'▼';
+}
+
+// ── Config ──
+const PROXY_URL = 'YOUR_WORKER_URL_HERE'; // ← замени на URL своего Cloudflare Worker
+
+// ── Fetch ──
+async function fetchAlerts() {
+  const url = PROXY_URL + '/alerts';
+  const res = await fetch(url, { cache: 'no-store' });
+  const text = (await res.text()).trim();
+  if (!text || text==='null' || text==='[]' || text==='{}') return [];
+  const json = JSON.parse(text);
+  if (json && json.data && json.data.length > 0) return [{id:json.id, title:json.title, data:json.data}];
+  return [];
+}
+
+// ── Poll ──
+async function poll() {
+  try {
+    const alerts = await fetchAlerts();
+    consecutiveErrors = 0; hideError();
+    if (alerts.length > 0) {
+      const ids = new Set(alerts.map(a=>String(a.id||JSON.stringify(a.data))));
+      if ([...ids].some(id=>!lastAlertIds.has(id))) playAlert();
+      lastAlertIds = ids;
+    } else { lastAlertIds = new Set(); }
+    renderAlerts(alerts); addHistory(alerts);
+  } catch(e) {
+    consecutiveErrors++;
+    if (consecutiveErrors >= 2) { setStatus('error','ERROR'); showError(`שגיאת חיבור: ${e.message}`); }
+    addHistory([]);
+  }
+  startProgress();
+}
+
+poll();
+setInterval(poll, INTERVAL);
+</script>
+</body>
+</html>

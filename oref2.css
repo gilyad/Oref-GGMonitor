@@ -97,32 +97,21 @@ footer { padding:4px 18px; border-top:1px solid var(--border); display:flex; ali
 
 /* RESPONSIVE */
 @media(max-width:700px){
-  body { overflow:auto; height:auto; }
+  body { overflow: hidden; height: 100vh; }
 
-  header { padding:8px 12px; }
+  header { padding:6px 12px; }
   .logo-sub { display:none; }
   #clock { display:none; }
-  .hdr-btn { padding:3px 7px; font-size:9px; }
+  .logo-icon { width:26px; height:26px; font-size:14px; }
+  .logo-title { font-size:13px; }
+  .hdr-btn { padding:3px 6px; font-size:9px; }
 
-  main {
-    grid-template-columns: 1fr !important;
-    grid-template-rows: auto;
-    overflow: visible;
-    height: auto;
-  }
+  #city-filter-bar { padding:4px 10px; gap:6px; min-height:0; }
+  #city-input { width:130px; }
 
-  /* порядок: статус → карта → история */
-  .sidebar { order:1; border-right:none; border-bottom:1px solid var(--border); }
-  .alerts-scroll { max-height:200px; }
-  .banner { padding:10px; }
-  .banner-emoji { font-size:26px; }
-  .banner-title { font-size:15px; }
+  .alerts-scroll { flex:1; }
+  .history-panel { border-right:none; border-top: none; }
+  .history-scroll { flex:1; max-height:none; }
 
-  #map { order:2; height:45vh; }
-
-  .history-panel { order:3; width:100% !important; max-height:160px; border-right:none; border-top:1px solid var(--border); }
-  .history-scroll { max-height:120px; }
-
-  #city-filter-bar { padding:5px 10px; gap:6px; }
-  #city-input { width:140px; }
+  footer { padding:3px 14px; }
 }

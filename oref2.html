@@ -148,6 +148,12 @@ main { flex:1; display:grid; grid-template-columns:280px 1fr 230px; overflow:hid
 .hitem.was-ended { border-right-color: rgba(45,189,110,0.6); background: rgba(45,189,110,0.05); }
 .htime { font-family: var(--mono); font-size: 8px; color: var(--text-dim); margin-bottom: 3px; }
 .hareas { color: var(--text); line-height: 1.5; font-size: 10px; }
+
+@media(max-width:700px){
+  main { grid-template-columns:1fr !important; height:auto; overflow:visible; }
+  .history-panel { width:100% !important; }
+  #city-filter-bar label { display:none; }
+}
 </style>
 </head>
 <body>

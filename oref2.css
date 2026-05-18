@@ -77,10 +77,10 @@ main { flex:1; display:grid; grid-template-columns:20% 1fr 30%; overflow:hidden;
 .history-body { max-height:130px; overflow-y:auto; padding:0 6px 6px; }
 .history-body::-webkit-scrollbar { width:3px; }
 .history-body::-webkit-scrollbar-thumb { background:var(--border); }
-.hitem { padding:4px 8px; border-right:2px solid var(--border); margin-bottom:2px; font-size:12px; }
+.hitem { padding:3px 8px; border-right:2px solid var(--border); margin-bottom:2px; font-size:11px; }
 .hitem.was-alert { border-right-color:rgba(230,57,70,0.55); }
-.htime { font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-bottom:1px; }
-.hareas { color:var(--text); line-height:1.4; font-size:12px; }
+.htime { font-family:var(--mono); font-size:9px; color:var(--text-dim); margin-bottom:1px; }
+.hareas { color:var(--text); line-height:1.4; font-size:11px; }
 
 /* FOOTER */
 footer { padding:4px 18px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; font-family:var(--mono); font-size:9px; color:var(--text-dim); background:var(--panel); flex-shrink:0; }

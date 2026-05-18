@@ -86,7 +86,7 @@
 .city-tag-x:hover { opacity: 1; }
 
 /* ── 3-COLUMN LAYOUT ── */
-main { flex:1; display:grid; grid-template-columns:25% 50% 25%; overflow:hidden; min-height:0; }
+main { flex:1; display:grid; grid-template-columns:1fr 2fr 1fr; overflow:hidden; min-height:0; }
 
 /* ── ALERT CARDS ── */
 .alert-card {
@@ -132,6 +132,7 @@ main { flex:1; display:grid; grid-template-columns:25% 50% 25%; overflow:hidden;
   border-right: 1px solid var(--border);
   background: var(--panel);
   overflow: hidden;
+  min-width: 0;
 }
 .history-scroll {
   flex: 1;
